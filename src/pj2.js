@@ -3,12 +3,17 @@
 
 // 获取canvas及其上下文
 let canvas = document.getElementById("webgl");
-let ctx = canvas.getContext("webgl");
+let gl = canvas.getContext("webgl");
+
 
 // 可以拖动的半径
 let dragRadius = 10;
 
 function main() {
+    if (!gl) {
+        console.log('Failed to get the rendering context for WebGL');
+    }
+
     // 设置canvas大小
     canvas.width = canvasSize.maxX;
     canvas.height = canvasSize.maxY;
@@ -16,10 +21,9 @@ function main() {
     //初始化事件处理函数
     initEventHandlers();
 
-    //第一次绘制图形
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    //设置背景颜色，清空画布
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
 
     drawAll();
 }
@@ -40,29 +44,26 @@ function reDraw(_vertex) {
     for (let i = 0; i < polygon.length; i++) {
         if (polygon[i].includes(_vertex)) {
             reDrawPolygon.push(polygon[i]);
-        }else {
+        } else {
             unchangedPolygon.push(polygon[i]);
         }
     }
 
-    //清空画布
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    //设置背景为黑色
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
 
     //绘制图形
-    for(let i = 0; i < unchangedPolygon.length; i++) {
-        drawPolygon(ctx, vertex_pos, unchangedPolygon[i], vertex_color[unchangedPolygon[i][0]]);
+    for (let i = 0; i < unchangedPolygon.length; i++) {
+        drawPolygon(unchangedPolygon[i]);
     }
     for (let i = 0; i < reDrawPolygon.length; i++) {
-        drawPolygon(ctx, vertex_pos, reDrawPolygon[i], vertex_color[reDrawPolygon[i][0]]);
+        drawPolygon(reDrawPolygon[i]);
     }
 }
 
 
 function drawPolygon(_polygon) {
+    console.log(_polygon);
     // Todo
 }
 

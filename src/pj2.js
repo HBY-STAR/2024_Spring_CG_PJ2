@@ -46,8 +46,7 @@ let animationId;
 let angle_last_change = Date.now();
 let size_last_change = Date.now();
 let modelMatrix = new Matrix4();
-let recordAngle = 0.0;
-let recordSize = 1.0;
+
 
 function main() {
     // 设置canvas大小
@@ -81,10 +80,7 @@ function startAnimation() {
 
 
     function animate() {
-        currentAngle = computeAngle();
-        currentSize = computeSize();
-
-        reDraw()
+        reDraw(computeRotate(), computeScale());
 
         animationId = requestAnimationFrame(animate); // 请求下一帧
     }
@@ -118,37 +114,40 @@ function updateVertexPos() {
 }
 
 
-function computeAngle() {
+function computeRotate() {
     // 计算时间间隔
     let now = Date.now();
     let elapsed = now - angle_last_change;
     angle_last_change = now;
 
-    // 记录当前角度
-    recordAngle = (recordAngle + (ANGLE_STEP * elapsed) / 1000.0) % 360;
+    // 计算旋转角度
+    let rotate = (ANGLE_STEP * elapsed) / 1000.0;
+
 
     // 计算新的角度
-    let newAngle = currentAngle + (ANGLE_STEP * elapsed) / 1000.0;
+    currentAngle = (currentAngle + rotate) % 360;
 
-    return newAngle % 360;
+    return rotate;
 }
 
-function computeSize() {
+function computeScale() {
     // 计算时间间隔
     let now = Date.now();
     let elapsed = now - size_last_change;
     size_last_change = now;
 
-    // 记录当前大小
-    recordSize = recordSize + (SIZE_STEP * currentSizeDir * elapsed) / 1000.0;
+    // 计算缩放大小
+    let curScale = currentSize;
+    let scale = (SIZE_STEP * currentSizeDir * elapsed) / 1000.0;
+    let ret = (curScale + scale) / curScale;
 
     // 计算新的大小
-    let newSize = currentSize + (SIZE_STEP * currentSizeDir * elapsed) / 1000.0;
-    if (recordSize > 1.0 || recordSize < 0.2) {
+    currentSize = currentSize * ret;
+    if (currentSize > 1.0 || currentSize < 0.2) {
         currentSizeDir = -currentSizeDir;
     }
 
-    return newSize;
+    return ret;
 }
 
 
@@ -192,7 +191,7 @@ function initVertexBuffers() {
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
 }
 
-function drawAll(_u_ModelMatrix) {
+function drawAll(_u_ModelMatrix, _rotate = 0.0, _scale = 1.0) {
     if (!_u_ModelMatrix) {
         console.log('Failed to get the storage location of u_ModelMatrix');
         return;
@@ -200,8 +199,8 @@ function drawAll(_u_ModelMatrix) {
 
     if (animOn) {
         // 设置模型矩阵
-        modelMatrix.setRotate(currentAngle, 0, 0, 1);
-        modelMatrix.scale(currentSize, currentSize, 1);
+        modelMatrix.rotate(_rotate, 0, 0, 1);
+        modelMatrix.scale(_scale, _scale, 1);
         // 将模型矩阵传给顶点着色器
         gl.uniformMatrix4fv(_u_ModelMatrix, false, modelMatrix.elements);
     } else {
@@ -228,12 +227,12 @@ function drawAll(_u_ModelMatrix) {
 
 }
 
-function reDraw() {
+function reDraw(_rotate = 0.0, _scale = 1.0) {
     initVertexBuffers();
 
     let u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
 
-    drawAll(u_ModelMatrix);
+    drawAll(u_ModelMatrix, _rotate, _scale);
 }
 
 function initMouseEventHandlers() {
@@ -302,11 +301,8 @@ function initKeyboardEventHandlers() {
                 } else {
                     stopAnimation();
                     updateVertexPos();
-
-                    console.log(vertex_pos)
-                    currentAngle = 0.0;
-                    currentSize = 1.0;
                     modelMatrix.setIdentity();
+                    console.log(vertex_pos);
                 }
                 break;
             default:

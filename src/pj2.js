@@ -46,6 +46,8 @@ let animationId;
 let angle_last_change = Date.now();
 let size_last_change = Date.now();
 let modelMatrix = new Matrix4();
+let recordAngle = 0.0;
+let recordSize = 1.0;
 
 function main() {
     // 设置canvas大小
@@ -68,25 +70,21 @@ function main() {
     // 设置背景色
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
 
-    // 模型矩阵
-    let modelMatrix = new Matrix4();
     let u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
 
-    drawAll(modelMatrix, u_ModelMatrix);
+    drawAll(u_ModelMatrix);
 }
 
 function startAnimation() {
     if (animationId)
         return;
 
-    // 设置模型矩阵
-    let u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
 
-    function animate(currentTime) {
+    function animate() {
         currentAngle = computeAngle();
         currentSize = computeSize();
 
-        drawAll(modelMatrix, u_ModelMatrix);
+        reDraw()
 
         animationId = requestAnimationFrame(animate); // 请求下一帧
     }
@@ -102,6 +100,23 @@ function stopAnimation() {
     animationId = undefined;
 }
 
+function updateVertexPos() {
+    for (let i = 0; i < vertex_pos.length; i++) {
+        let width = canvasSize.maxX / 2;
+        let height = canvasSize.maxY / 2;
+
+        let x = (vertex_pos[i][0] - width) / width;
+        let y = -(vertex_pos[i][1] - height) / height;
+        let z = 0.0;
+
+        let pos = new Vector4([x, y, z, 1]);
+        let newPos = modelMatrix.multiplyVector4(pos);
+
+        vertex_pos[i][0] = newPos.elements[0] * width + width;
+        vertex_pos[i][1] = -newPos.elements[1] * height + height;
+    }
+}
+
 
 function computeAngle() {
     // 计算时间间隔
@@ -109,22 +124,30 @@ function computeAngle() {
     let elapsed = now - angle_last_change;
     angle_last_change = now;
 
+    // 记录当前角度
+    recordAngle = (recordAngle + (ANGLE_STEP * elapsed) / 1000.0) % 360;
+
     // 计算新的角度
     let newAngle = currentAngle + (ANGLE_STEP * elapsed) / 1000.0;
+
     return newAngle % 360;
 }
 
 function computeSize() {
-// 计算时间间隔
+    // 计算时间间隔
     let now = Date.now();
     let elapsed = now - size_last_change;
     size_last_change = now;
 
+    // 记录当前大小
+    recordSize = recordSize + (SIZE_STEP * currentSizeDir * elapsed) / 1000.0;
+
     // 计算新的大小
     let newSize = currentSize + (SIZE_STEP * currentSizeDir * elapsed) / 1000.0;
-    if (newSize > 1.0 || newSize < 0.2) {
+    if (recordSize > 1.0 || recordSize < 0.2) {
         currentSizeDir = -currentSizeDir;
     }
+
     return newSize;
 }
 
@@ -169,18 +192,23 @@ function initVertexBuffers() {
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
 }
 
-function drawAll(_modelMatrix, _u_ModelMatrix) {
+function drawAll(_u_ModelMatrix) {
     if (!_u_ModelMatrix) {
         console.log('Failed to get the storage location of u_ModelMatrix');
         return;
     }
 
-    // 设置模型矩阵
-    _modelMatrix.setRotate(currentAngle, 0, 0, 1);
-    _modelMatrix.scale(currentSize, currentSize, 1);
+    if (animOn) {
+        // 设置模型矩阵
+        modelMatrix.setRotate(currentAngle, 0, 0, 1);
+        modelMatrix.scale(currentSize, currentSize, 1);
+        // 将模型矩阵传给顶点着色器
+        gl.uniformMatrix4fv(_u_ModelMatrix, false, modelMatrix.elements);
+    } else {
+        modelMatrix.setIdentity();
+        gl.uniformMatrix4fv(_u_ModelMatrix, false, modelMatrix.elements);
+    }
 
-    // 将模型矩阵传给顶点着色器
-    gl.uniformMatrix4fv(_u_ModelMatrix, false, _modelMatrix.elements);
 
     // 清空缓冲区
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -202,7 +230,10 @@ function drawAll(_modelMatrix, _u_ModelMatrix) {
 
 function reDraw() {
     initVertexBuffers();
-    drawAll();
+
+    let u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
+
+    drawAll(u_ModelMatrix);
 }
 
 function initMouseEventHandlers() {
@@ -270,6 +301,12 @@ function initKeyboardEventHandlers() {
                     startAnimation();
                 } else {
                     stopAnimation();
+                    updateVertexPos();
+
+                    console.log(vertex_pos)
+                    currentAngle = 0.0;
+                    currentSize = 1.0;
+                    modelMatrix.setIdentity();
                 }
                 break;
             default:

@@ -68,8 +68,9 @@ function main() {
 function translateVertexColors() {
     let width = canvasSize.maxX / 2;
     let height = canvasSize.maxY / 2;
+    let vertexNum = polygon.length * 4 * 5;
 
-    let vertexColors = new Float32Array(polygon.length * 4 * 5); // 4顶点 * 5属性（x, y, r, g, b）
+    let vertexColors = new Float32Array(vertexNum * 2);
     for (let i = 0; i < polygon.length; i++) {
         for (let j = 0; j < 4; j++) {
             let index = (i * 4 + j) * 5; // 计算当前顶点在数组中的起始索引
@@ -83,6 +84,12 @@ function translateVertexColors() {
             vertexColors[index + 2] = r;
             vertexColors[index + 3] = g;
             vertexColors[index + 4] = b;
+
+            vertexColors[index + vertexNum] = x;
+            vertexColors[index + vertexNum + 1] = y;
+            vertexColors[index + vertexNum + 2] = 1.0;
+            vertexColors[index + vertexNum + 3] = 0.0;
+            vertexColors[index + vertexNum + 4] = 0.0;
         }
     }
     return vertexColors;
@@ -90,7 +97,7 @@ function translateVertexColors() {
 
 function initVertexBuffers() {
     let verticesColors = translateVertexColors();
-    let n = polygon.length * 4;
+    let n = polygon.length * 4 * 2;
 
     // 创建缓冲区对象
     let vertexColorBuffer = gl.createBuffer();
@@ -133,8 +140,12 @@ function initVertexBuffers() {
 
 
 function drawAll(_n) {
-    for (let i = 0; i < _n; i += 4) {
+    for (let i = 0; i < _n / 2; i += 4) {
         gl.drawArrays(gl.TRIANGLE_FAN, i, 4);
+    }
+    for (let i = _n / 2; i < _n; i += 4) {
+        gl.drawArrays(gl.LINE_LOOP, i, 4);
+        gl.drawArrays(gl.LINE_LOOP, i, 3);
     }
 }
 
@@ -166,7 +177,7 @@ function reDraw(_vertex) {
 
 
 function drawPolygon(_polygon) {
-    console.log(_polygon);
+    // console.log(_polygon);
     // Todo
 }
 
@@ -208,6 +219,7 @@ function initEventHandlers() {
             vertex_pos[vertex][1] = y - rect.top;
             //重新绘制
             reDraw(vertex);
+            console.log(vertex);
         }
         // lastX = x - rect.left;
         // lastY = y - rect.top;

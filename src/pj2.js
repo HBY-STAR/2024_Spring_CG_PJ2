@@ -32,16 +32,16 @@ let dragRadius = 10;
 let vertexNum = polygon.length * 4;
 
 // 状态管理
-let lineOn = true;
-let editOn = true;
-let animOn = false;
+let lineOn = true;      // 是否显示线框
+let editOn = true;      // 是否进入编辑模式
+let animOn = false;     // 是否进入动画模式
 
 // 动画相关
-let ANGLE_STEP = 45.0;
-let currentAngle = 0.0;
-let SIZE_STEP = 0.2;
-let currentSize = 1.0;
-let currentSizeDir = -1.0;
+let ANGLE_STEP = 45.0;      // 旋转速度
+let currentAngle = 0.0;     // 当前旋转角度
+let SIZE_STEP = 0.2;        // 缩放速度
+let currentSize = 1.0;      // 当前缩放大小
+let currentSizeDir = -1.0;  // 缩放方向
 let animationId;
 let angle_last_change = Date.now();
 let size_last_change = Date.now();
@@ -197,16 +197,11 @@ function drawAll(_u_ModelMatrix, _rotate = 0.0, _scale = 1.0) {
         return;
     }
 
-    if (animOn) {
-        // 设置模型矩阵
-        modelMatrix.rotate(_rotate, 0, 0, 1);
-        modelMatrix.scale(_scale, _scale, 1);
-        // 将模型矩阵传给顶点着色器
-        gl.uniformMatrix4fv(_u_ModelMatrix, false, modelMatrix.elements);
-    } else {
-        modelMatrix.setIdentity();
-        gl.uniformMatrix4fv(_u_ModelMatrix, false, modelMatrix.elements);
-    }
+    // 设置模型矩阵
+    modelMatrix.rotate(_rotate, 0, 0, 1);
+    modelMatrix.scale(_scale, _scale, 1);
+    // 将模型矩阵传给顶点着色器
+    gl.uniformMatrix4fv(_u_ModelMatrix, false, modelMatrix.elements);
 
 
     // 清空缓冲区
@@ -229,9 +224,7 @@ function drawAll(_u_ModelMatrix, _rotate = 0.0, _scale = 1.0) {
 
 function reDraw(_rotate = 0.0, _scale = 1.0) {
     initVertexBuffers();
-
     let u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
-
     drawAll(u_ModelMatrix, _rotate, _scale);
 }
 
@@ -284,28 +277,59 @@ function initKeyboardEventHandlers() {
         switch (ev.key) {
             case 'e':
                 editOn = !editOn;
+                if (editOn) {
+                    if (animOn) {
+                        // 关闭动画
+                        animOn = false;
+                        stopAnimation();
+                        updateVertexPos();
+                        modelMatrix.setIdentity();
+                    }
+
+                    // 重新绘制
+                    reDraw(-currentAngle, 1 / currentSize);
+
+                    // 重置顶点
+                    modelMatrix.setIdentity();
+                    modelMatrix.rotate(-currentAngle, 0, 0, 1);
+                    modelMatrix.scale(1 / currentSize, 1 / currentSize, 1);
+                    updateVertexPos();
+
+                    // 重置参数
+                    modelMatrix.setIdentity();
+                    currentAngle = 0.0;
+                    currentSize = 1.0;
+                }
                 console.log('edit switch: ' + editOn)
                 break;
             case 'b':
                 lineOn = !lineOn;
-                console.log('line switch: ' + lineOn)
+                // 重新绘制
                 reDraw()
+
+                console.log('line switch: ' + lineOn)
                 break;
             case 't':
                 animOn = !animOn;
-                console.log('anim switch: ' + animOn)
+
                 if (animOn) {
+                    // 开启动画
+                    editOn = false;
                     angle_last_change = Date.now();
                     size_last_change = Date.now();
                     startAnimation();
                 } else {
+                    // 关闭动画
                     stopAnimation();
                     updateVertexPos();
                     modelMatrix.setIdentity();
                     console.log(vertex_pos);
                 }
+
+                console.log('anim switch: ' + animOn)
                 break;
             default:
+                console.log('Invalid key: ' + ev.key);
                 break;
         }
     }

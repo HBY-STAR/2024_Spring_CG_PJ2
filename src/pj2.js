@@ -42,12 +42,15 @@ let currentAngle = 0.0;     // 当前旋转角度
 let SIZE_STEP = 0.2;        // 缩放速度
 let currentSize = 1.0;      // 当前缩放大小
 let currentSizeDir = -1.0;  // 缩放方向
-let animationId;
-let angle_last_change = Date.now();
-let size_last_change = Date.now();
-let modelMatrix = new Matrix4();
 
+let animationId;                                 // 记录动画ID
+let angle_last_change = Date.now();     // 记录上次旋转时间
+let size_last_change = Date.now();      // 记录上次缩放时间
+let modelMatrix = new Matrix4();        // 模型矩阵
 
+/**
+ * 主函数
+ */
 function main() {
     // 设置canvas大小
     canvas.width = canvasSize.maxX;
@@ -64,7 +67,10 @@ function main() {
     }
 
     // 初始化顶点缓冲区
-    initVertexBuffers();
+    if(initVertexBuffers() < 0) {
+        console.log('Failed to set the positions of the vertices');
+        return;
+    }
 
     // 设置背景色
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -74,160 +80,9 @@ function main() {
     drawAll(u_ModelMatrix);
 }
 
-function startAnimation() {
-    if (animationId)
-        return;
-
-
-    function animate() {
-        reDraw(computeRotate(), computeScale());
-
-        animationId = requestAnimationFrame(animate); // 请求下一帧
-    }
-
-    animationId = requestAnimationFrame(animate);
-}
-
-function stopAnimation() {
-    if (!animationId)
-        return;
-
-    cancelAnimationFrame(animationId);
-    animationId = undefined;
-}
-
-function updateVertexPos() {
-    for (let i = 0; i < vertex_pos.length; i++) {
-        let width = canvasSize.maxX / 2;
-        let height = canvasSize.maxY / 2;
-
-        let x = (vertex_pos[i][0] - width) / width;
-        let y = -(vertex_pos[i][1] - height) / height;
-        let z = 0.0;
-
-        let pos = new Vector4([x, y, z, 1]);
-        let newPos = modelMatrix.multiplyVector4(pos);
-
-        vertex_pos[i][0] = newPos.elements[0] * width + width;
-        vertex_pos[i][1] = -newPos.elements[1] * height + height;
-    }
-}
-
-
-function computeRotate() {
-    // 计算时间间隔
-    let now = Date.now();
-    let elapsed = now - angle_last_change;
-    angle_last_change = now;
-
-    // 计算旋转角度
-    let rotate = (ANGLE_STEP * elapsed) / 1000.0;
-
-
-    // 计算新的角度
-    currentAngle = (currentAngle + rotate) % 360;
-
-    return rotate;
-}
-
-function computeScale() {
-    // 计算时间间隔
-    let now = Date.now();
-    let elapsed = now - size_last_change;
-    size_last_change = now;
-
-    // 计算缩放大小
-    let curScale = currentSize;
-    let scale = (SIZE_STEP * currentSizeDir * elapsed) / 1000.0;
-    let ret = (curScale + scale) / curScale;
-
-    // 计算新的大小
-    currentSize = currentSize * ret;
-    if (currentSize > 1.0 || currentSize < 0.2) {
-        currentSizeDir = -currentSizeDir;
-    }
-
-    return ret;
-}
-
-
-function initVertexBuffers() {
-    let verticesColors = translateVertexColors();
-
-    // 创建缓冲区对象
-    let vertexColorBuffer = gl.createBuffer();
-    if (!vertexColorBuffer) {
-        console.log('Failed to create the buffer object');
-        return false;
-    }
-
-    // 将缓冲区对象绑定到目标
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexColorBuffer);
-
-    // 向缓冲区对象写入数据
-    gl.bufferData(gl.ARRAY_BUFFER, verticesColors, gl.STATIC_DRAW);
-
-    let FSIZE = verticesColors.BYTES_PER_ELEMENT;
-
-    // 获取a_Position的存储位置，分配缓冲区并开启
-    let a_Position = gl.getAttribLocation(gl.program, 'a_Position');
-    if (a_Position < 0) {
-        console.log('Failed to get the storage location of a_Position');
-        return -1;
-    }
-    gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, FSIZE * 5, 0);
-    gl.enableVertexAttribArray(a_Position);
-
-    // 获取a_Color的存储位置，分配缓冲区并开启
-    let a_Color = gl.getAttribLocation(gl.program, 'a_Color');
-    if (a_Color < 0) {
-        console.log('Failed to get the storage location of a_Color');
-        return -1;
-    }
-    gl.vertexAttribPointer(a_Color, 3, gl.FLOAT, false, FSIZE * 5, FSIZE * 2);
-    gl.enableVertexAttribArray(a_Color);
-
-    // 解绑缓冲区对象
-    gl.bindBuffer(gl.ARRAY_BUFFER, null);
-}
-
-function drawAll(_u_ModelMatrix, _rotate = 0.0, _scale = 1.0) {
-    if (!_u_ModelMatrix) {
-        console.log('Failed to get the storage location of u_ModelMatrix');
-        return;
-    }
-
-    // 设置模型矩阵
-    modelMatrix.rotate(_rotate, 0, 0, 1);
-    modelMatrix.scale(_scale, _scale, 1);
-    // 将模型矩阵传给顶点着色器
-    gl.uniformMatrix4fv(_u_ModelMatrix, false, modelMatrix.elements);
-
-
-    // 清空缓冲区
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    // 绘制多边形
-    for (let i = 0; i < vertexNum; i += 4) {
-        gl.drawArrays(gl.TRIANGLE_FAN, i, 4);
-    }
-
-    if (lineOn) {
-        // 绘制线框
-        for (let i = vertexNum; i < vertexNum * 2; i += 4) {
-            gl.drawArrays(gl.LINE_LOOP, i, 4);
-            gl.drawArrays(gl.LINE_LOOP, i, 3);
-        }
-    }
-
-}
-
-function reDraw(_rotate = 0.0, _scale = 1.0) {
-    initVertexBuffers();
-    let u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
-    drawAll(u_ModelMatrix, _rotate, _scale);
-}
-
+/**
+ * 初始化鼠标事件处理函数
+ */
 function initMouseEventHandlers() {
     let dragging = false;               //是否可以拖动
     let vertex = -1;                    //拖动的顶点
@@ -272,6 +127,9 @@ function initMouseEventHandlers() {
 
 }
 
+/**
+ * 初始化键盘事件处理函数
+ */
 function initKeyboardEventHandlers() {
     document.onkeydown = function (ev) {
         switch (ev.key) {
@@ -335,16 +193,103 @@ function initKeyboardEventHandlers() {
     }
 }
 
-function canDrag(_x, _y) {
-    //遍历所有顶点
-    for (let i = 0; i < vertex_pos.length; i++) {
-        if ((vertex_pos[i][0] - _x) * (vertex_pos[i][0] - _x) + (vertex_pos[i][1] - _y) * (vertex_pos[i][1] - _y) < dragRadius * dragRadius) {
-            return i;
-        }
+
+/**
+ * 初始化顶点缓冲区
+ * @returns {number}
+ */
+function initVertexBuffers() {
+    let verticesColors = translateVertexColors();
+
+    // 创建缓冲区对象
+    let vertexColorBuffer = gl.createBuffer();
+    if (!vertexColorBuffer) {
+        console.log('Failed to create the buffer object');
+        return -1;
     }
-    return -1;
+
+    // 将缓冲区对象绑定到目标
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexColorBuffer);
+
+    // 向缓冲区对象写入数据
+    gl.bufferData(gl.ARRAY_BUFFER, verticesColors, gl.STATIC_DRAW);
+
+    let FSIZE = verticesColors.BYTES_PER_ELEMENT;
+
+    // 获取a_Position的存储位置，分配缓冲区并开启
+    let a_Position = gl.getAttribLocation(gl.program, 'a_Position');
+    if (a_Position < 0) {
+        console.log('Failed to get the storage location of a_Position');
+        return -1;
+    }
+    gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, FSIZE * 5, 0);
+    gl.enableVertexAttribArray(a_Position);
+
+    // 获取a_Color的存储位置，分配缓冲区并开启
+    let a_Color = gl.getAttribLocation(gl.program, 'a_Color');
+    if (a_Color < 0) {
+        console.log('Failed to get the storage location of a_Color');
+        return -1;
+    }
+    gl.vertexAttribPointer(a_Color, 3, gl.FLOAT, false, FSIZE * 5, FSIZE * 2);
+    gl.enableVertexAttribArray(a_Color);
+
+    // 解绑缓冲区对象
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
 }
 
+/**
+ * 绘制多边形及线框
+ * @param _u_ModelMatrix
+ * @param _rotate
+ * @param _scale
+ */
+function drawAll(_u_ModelMatrix, _rotate = 0.0, _scale = 1.0) {
+    if (!_u_ModelMatrix) {
+        console.log('Failed to get the storage location of u_ModelMatrix');
+        return;
+    }
+
+    // 设置模型矩阵
+    modelMatrix.rotate(_rotate, 0, 0, 1);
+    modelMatrix.scale(_scale, _scale, 1);
+    // 将模型矩阵传给顶点着色器
+    gl.uniformMatrix4fv(_u_ModelMatrix, false, modelMatrix.elements);
+
+
+    // 清空缓冲区
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // 绘制多边形
+    for (let i = 0; i < vertexNum; i += 4) {
+        gl.drawArrays(gl.TRIANGLE_FAN, i, 4);
+    }
+
+    if (lineOn) {
+        // 绘制线框
+        for (let i = vertexNum; i < vertexNum * 2; i += 4) {
+            gl.drawArrays(gl.LINE_LOOP, i, 4);
+            gl.drawArrays(gl.LINE_LOOP, i, 3);
+        }
+    }
+
+}
+
+/**
+ * 重新绘制所有图形
+ * @param _rotate
+ * @param _scale
+ */
+function reDraw(_rotate = 0.0, _scale = 1.0) {
+    initVertexBuffers();
+    let u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
+    drawAll(u_ModelMatrix, _rotate, _scale);
+}
+
+/**
+ * 将顶点坐标和颜色转换为WebGL坐标系
+ * @returns {Float32Array}
+ */
 function translateVertexColors() {
     let width = canvasSize.maxX / 2;
     let height = canvasSize.maxY / 2;
@@ -358,12 +303,14 @@ function translateVertexColors() {
             let r = vertex_color[polygon[i][j]][0] / 255;
             let g = vertex_color[polygon[i][j]][1] / 255;
             let b = vertex_color[polygon[i][j]][2] / 255;
+            // 存放顶点坐标和颜色信息，用于绘制多边形
             vertexColors[index] = x;
             vertexColors[index + 1] = y;
             vertexColors[index + 2] = r;
             vertexColors[index + 3] = g;
             vertexColors[index + 4] = b;
 
+            // 存放顶点坐标，颜色设为红色，用于绘制线框
             vertexColors[index + vertexNum * 5] = x;
             vertexColors[index + vertexNum * 5 + 1] = y;
             vertexColors[index + vertexNum * 5 + 2] = 1.0;
@@ -373,3 +320,114 @@ function translateVertexColors() {
     }
     return vertexColors;
 }
+
+
+/**
+ * 更新顶点位置
+ */
+function updateVertexPos() {
+    for (let i = 0; i < vertex_pos.length; i++) {
+        let width = canvasSize.maxX / 2;
+        let height = canvasSize.maxY / 2;
+
+        // 将顶点坐标转换为WebGL坐标系
+        let x = (vertex_pos[i][0] - width) / width;
+        let y = -(vertex_pos[i][1] - height) / height;
+        let z = 0.0;
+
+        // 计算新的顶点坐标
+        let pos = new Vector4([x, y, z, 1]);
+        let newPos = modelMatrix.multiplyVector4(pos);
+
+        // 更新顶点坐标
+        vertex_pos[i][0] = newPos.elements[0] * width + width;
+        vertex_pos[i][1] = -newPos.elements[1] * height + height;
+    }
+}
+
+
+/**
+ * 开启动画
+ */
+function startAnimation() {
+    if (animationId)
+        return;
+
+    function animate() {
+        reDraw(computeRotate(), computeScale());
+        animationId = requestAnimationFrame(animate); // 请求下一帧
+    }
+
+    animationId = requestAnimationFrame(animate);
+}
+
+/**
+ * 关闭动画
+ */
+function stopAnimation() {
+    if (!animationId)
+        return;
+
+    cancelAnimationFrame(animationId);
+    animationId = undefined;
+}
+
+
+/**
+ * 计算旋转角度
+ * @returns {number}
+ */
+function computeRotate() {
+    // 计算时间间隔
+    let now = Date.now();
+    let elapsed = now - angle_last_change;
+    angle_last_change = now;
+
+    // 计算旋转角度
+    let rotate = (ANGLE_STEP * elapsed) / 1000.0;
+
+    // 计算新的角度
+    currentAngle = (currentAngle + rotate) % 360;
+
+    return rotate;
+}
+
+/**
+ * 计算缩放大小
+ * @returns {number}
+ */
+function computeScale() {
+    // 计算时间间隔
+    let now = Date.now();
+    let elapsed = now - size_last_change;
+    size_last_change = now;
+
+    // 计算缩放大小
+    let curScale = currentSize;
+    let scale = (SIZE_STEP * currentSizeDir * elapsed) / 1000.0;
+    let ret = (curScale + scale) / curScale;
+
+    // 计算新的大小
+    currentSize = currentSize * ret;
+    if (currentSize > 1.0 || currentSize < 0.2) {
+        currentSizeDir = -currentSizeDir;
+    }
+
+    return ret;
+}
+
+/**
+ * 判断鼠标是否在顶点附近
+ * @param _x
+ * @param _y
+ * @returns {number}
+ */
+function canDrag(_x, _y) {
+    for (let i = 0; i < vertex_pos.length; i++) {
+        if ((vertex_pos[i][0] - _x) * (vertex_pos[i][0] - _x) + (vertex_pos[i][1] - _y) * (vertex_pos[i][1] - _y) < dragRadius * dragRadius) {
+            return i;
+        }
+    }
+    return -1;
+}
+

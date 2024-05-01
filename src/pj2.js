@@ -28,6 +28,9 @@ let gl = canvas.getContext("webgl");
 // 顶点可以拖动的半径
 let dragRadius = 10;
 
+// 计算顶点数量
+let vertexNum = polygon.length * 4;
+
 // 状态管理
 let lineOn = true;
 let editOn = true;
@@ -48,9 +51,7 @@ function main() {
     }
 
     // 初始化着色器
-    if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
-        console.log('Failed to initialize shaders.');
-    }
+    initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
 
     // 初始化顶点缓冲区
     let n = initVertexBuffers();
@@ -58,42 +59,12 @@ function main() {
         console.log('Failed to set the positions of the vertices');
     }
 
-    drawAll(n);
+    drawAll();
 }
 
-function translateVertexColors() {
-    let width = canvasSize.maxX / 2;
-    let height = canvasSize.maxY / 2;
-    let vertexNum = polygon.length * 4 * 5;
-
-    let vertexColors = new Float32Array(vertexNum * 2);
-    for (let i = 0; i < polygon.length; i++) {
-        for (let j = 0; j < 4; j++) {
-            let index = (i * 4 + j) * 5; // 计算当前顶点在数组中的起始索引
-            let x = (vertex_pos[polygon[i][j]][0] - width) / width;
-            let y = -(vertex_pos[polygon[i][j]][1] - height) / height;
-            let r = vertex_color[polygon[i][j]][0] / 255;
-            let g = vertex_color[polygon[i][j]][1] / 255;
-            let b = vertex_color[polygon[i][j]][2] / 255;
-            vertexColors[index] = x;
-            vertexColors[index + 1] = y;
-            vertexColors[index + 2] = r;
-            vertexColors[index + 3] = g;
-            vertexColors[index + 4] = b;
-
-            vertexColors[index + vertexNum] = x;
-            vertexColors[index + vertexNum + 1] = y;
-            vertexColors[index + vertexNum + 2] = 1.0;
-            vertexColors[index + vertexNum + 3] = 0.0;
-            vertexColors[index + vertexNum + 4] = 0.0;
-        }
-    }
-    return vertexColors;
-}
 
 function initVertexBuffers() {
     let verticesColors = translateVertexColors();
-    let n = polygon.length * 4 * 2;
 
     // 创建缓冲区对象
     let vertexColorBuffer = gl.createBuffer();
@@ -117,7 +88,7 @@ function initVertexBuffers() {
         return -1;
     }
     gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, FSIZE * 5, 0);
-    gl.enableVertexAttribArray(a_Position);  // Enable the assignment of the buffer object
+    gl.enableVertexAttribArray(a_Position);
 
     // 获取a_Color的存储位置，分配缓冲区并开启
     let a_Color = gl.getAttribLocation(gl.program, 'a_Color');
@@ -126,26 +97,26 @@ function initVertexBuffers() {
         return -1;
     }
     gl.vertexAttribPointer(a_Color, 3, gl.FLOAT, false, FSIZE * 5, FSIZE * 2);
-    gl.enableVertexAttribArray(a_Color);  // Enable the assignment of the buffer object
+    gl.enableVertexAttribArray(a_Color);
 
     // 解绑缓冲区对象
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
-
-    return n;
 }
 
 
-function drawAll(_n) {
-    //设置背景颜色，清空画布
+function drawAll() {
+    //设置背景颜色，清空缓冲区
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    for (let i = 0; i < _n / 2; i += 4) {
+    //绘制多边形
+    for (let i = 0; i < vertexNum; i += 4) {
         gl.drawArrays(gl.TRIANGLE_FAN, i, 4);
     }
 
     if (lineOn) {
-        for (let i = _n / 2; i < _n; i += 4) {
+        //绘制线框
+        for (let i = vertexNum; i < vertexNum * 2; i += 4) {
             gl.drawArrays(gl.LINE_LOOP, i, 4);
             gl.drawArrays(gl.LINE_LOOP, i, 3);
         }
@@ -154,35 +125,9 @@ function drawAll(_n) {
 }
 
 
-function reDraw(_vertex) {
-    let reDrawPolygon = [];
-    let unchangedPolygon = [];
-
-    //根据顶点索引判断绘制顺序
-    for (let i = 0; i < polygon.length; i++) {
-        if (polygon[i].includes(_vertex)) {
-            reDrawPolygon.push(polygon[i]);
-        } else {
-            unchangedPolygon.push(polygon[i]);
-        }
-    }
-
-    // gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    // gl.clear(gl.COLOR_BUFFER_BIT);
-
-    //绘制图形
-    for (let i = 0; i < unchangedPolygon.length; i++) {
-        drawPolygon(unchangedPolygon[i]);
-    }
-    for (let i = 0; i < reDrawPolygon.length; i++) {
-        drawPolygon(reDrawPolygon[i]);
-    }
-}
-
-
-function drawPolygon(_polygon) {
-    // console.log(_polygon);
-    // Todo
+function reDraw() {
+    initVertexBuffers();
+    drawAll();
 }
 
 
@@ -222,11 +167,10 @@ function initMouseEventHandlers() {
             vertex_pos[vertex][0] = x - rect.left;
             vertex_pos[vertex][1] = y - rect.top;
             //重新绘制
-            reDraw(vertex);
-            console.log(vertex);
+            reDraw();
         }
-        // lastX = x - rect.left;
-        // lastY = y - rect.top;
+        lastX = x - rect.left;
+        lastY = y - rect.top;
     };
 
 }
@@ -261,4 +205,33 @@ function canDrag(_x, _y) {
         }
     }
     return -1;
+}
+
+function translateVertexColors() {
+    let width = canvasSize.maxX / 2;
+    let height = canvasSize.maxY / 2;
+
+    let vertexColors = new Float32Array(vertexNum * 5 * 2);
+    for (let i = 0; i < polygon.length; i++) {
+        for (let j = 0; j < 4; j++) {
+            let index = (i * 4 + j) * 5; // 计算当前顶点在数组中的起始索引
+            let x = (vertex_pos[polygon[i][j]][0] - width) / width;
+            let y = -(vertex_pos[polygon[i][j]][1] - height) / height;
+            let r = vertex_color[polygon[i][j]][0] / 255;
+            let g = vertex_color[polygon[i][j]][1] / 255;
+            let b = vertex_color[polygon[i][j]][2] / 255;
+            vertexColors[index] = x;
+            vertexColors[index + 1] = y;
+            vertexColors[index + 2] = r;
+            vertexColors[index + 3] = g;
+            vertexColors[index + 4] = b;
+
+            vertexColors[index + vertexNum * 5] = x;
+            vertexColors[index + vertexNum * 5 + 1] = y;
+            vertexColors[index + vertexNum * 5 + 2] = 1.0;
+            vertexColors[index + vertexNum * 5 + 3] = 0.0;
+            vertexColors[index + vertexNum * 5 + 4] = 0.0;
+        }
+    }
+    return vertexColors;
 }

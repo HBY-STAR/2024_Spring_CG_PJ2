@@ -39,7 +39,8 @@ function main() {
     canvas.height = canvasSize.maxY;
 
     //初始化事件处理函数
-    initEventHandlers();
+    initMouseEventHandlers();
+    initKeyboardEventHandlers();
 
     // 检测WebGL上下文
     if (!gl) {
@@ -56,11 +57,6 @@ function main() {
     if (n < 0) {
         console.log('Failed to set the positions of the vertices');
     }
-
-
-    //设置背景颜色，清空画布
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
 
     drawAll(n);
 }
@@ -140,13 +136,21 @@ function initVertexBuffers() {
 
 
 function drawAll(_n) {
+    //设置背景颜色，清空画布
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
     for (let i = 0; i < _n / 2; i += 4) {
         gl.drawArrays(gl.TRIANGLE_FAN, i, 4);
     }
-    for (let i = _n / 2; i < _n; i += 4) {
-        gl.drawArrays(gl.LINE_LOOP, i, 4);
-        gl.drawArrays(gl.LINE_LOOP, i, 3);
+
+    if (lineOn) {
+        for (let i = _n / 2; i < _n; i += 4) {
+            gl.drawArrays(gl.LINE_LOOP, i, 4);
+            gl.drawArrays(gl.LINE_LOOP, i, 3);
+        }
     }
+
 }
 
 
@@ -182,7 +186,7 @@ function drawPolygon(_polygon) {
 }
 
 
-function initEventHandlers() {
+function initMouseEventHandlers() {
     let dragging = false;               //是否可以拖动
     let vertex = -1;                    //拖动的顶点
     let lastX = -1, lastY = -1; //记录上一次鼠标位置
@@ -224,6 +228,29 @@ function initEventHandlers() {
         // lastX = x - rect.left;
         // lastY = y - rect.top;
     };
+
+}
+
+function initKeyboardEventHandlers() {
+    document.onkeydown = function (ev) {
+        switch (ev.key) {
+            case 'e':
+                editOn = !editOn;
+                console.log('edit switch: ' + editOn)
+                break;
+            case 'b':
+                lineOn = !lineOn;
+                console.log('line switch: ' + lineOn)
+                drawAll(polygon.length * 4 * 2)
+                break;
+            case 't':
+                animOn = !animOn;
+                console.log('anim switch: ' + animOn)
+                break;
+            default:
+                break;
+        }
+    }
 }
 
 function canDrag(_x, _y) {

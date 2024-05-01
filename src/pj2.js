@@ -6,8 +6,9 @@ let VSHADER_SOURCE =
     'attribute vec4 a_Position;\n' +
     'attribute vec4 a_Color;\n' +
     'varying vec4 v_Color;\n' +
+    'uniform mat4 u_ModelMatrix;\n' +
     'void main() {\n' +
-    '  gl_Position = a_Position;\n' +
+    '  gl_Position = u_ModelMatrix * a_Position;\n' +
     '  v_Color = a_Color;\n' +
     '}\n';
 
@@ -24,17 +25,27 @@ let FSHADER_SOURCE =
 let canvas = document.getElementById("webgl");
 let gl = canvas.getContext("webgl");
 
-
 // 顶点可以拖动的半径
 let dragRadius = 10;
 
-// 计算顶点数量
+// 顶点数量
 let vertexNum = polygon.length * 4;
 
 // 状态管理
 let lineOn = true;
 let editOn = true;
 let animOn = false;
+
+// 动画相关
+let ANGLE_STEP = 45.0;
+let currentAngle = 0.0;
+let SIZE_STEP = 0.2;
+let currentSize = 1.0;
+let currentSizeDir = -1.0;
+let animationId;
+let angle_last_change = Date.now();
+let size_last_change = Date.now();
+let modelMatrix = new Matrix4();
 
 function main() {
     // 设置canvas大小
@@ -45,21 +56,76 @@ function main() {
     initMouseEventHandlers();
     initKeyboardEventHandlers();
 
-    // 检测WebGL上下文
-    if (!gl) {
-        console.log('Failed to get the rendering context for WebGL');
-    }
-
     // 初始化着色器
-    initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+    if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
+        console.log('Failed to initialize shaders.');
+        return;
+    }
 
     // 初始化顶点缓冲区
-    let n = initVertexBuffers();
-    if (n < 0) {
-        console.log('Failed to set the positions of the vertices');
+    initVertexBuffers();
+
+    // 设置背景色
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+    // 模型矩阵
+    let modelMatrix = new Matrix4();
+    let u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
+
+    drawAll(modelMatrix, u_ModelMatrix);
+}
+
+function startAnimation() {
+    if (animationId)
+        return;
+
+    // 设置模型矩阵
+    let u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
+
+    function animate(currentTime) {
+        currentAngle = computeAngle();
+        currentSize = computeSize();
+
+        drawAll(modelMatrix, u_ModelMatrix);
+
+        animationId = requestAnimationFrame(animate); // 请求下一帧
     }
 
-    drawAll();
+    animationId = requestAnimationFrame(animate);
+}
+
+function stopAnimation() {
+    if (!animationId)
+        return;
+
+    cancelAnimationFrame(animationId);
+    animationId = undefined;
+}
+
+
+function computeAngle() {
+    // 计算时间间隔
+    let now = Date.now();
+    let elapsed = now - angle_last_change;
+    angle_last_change = now;
+
+    // 计算新的角度
+    let newAngle = currentAngle + (ANGLE_STEP * elapsed) / 1000.0;
+    return newAngle % 360;
+}
+
+function computeSize() {
+// 计算时间间隔
+    let now = Date.now();
+    let elapsed = now - size_last_change;
+    size_last_change = now;
+
+    // 计算新的大小
+    let newSize = currentSize + (SIZE_STEP * currentSizeDir * elapsed) / 1000.0;
+    if (newSize > 1.0 || newSize < 0.2) {
+        currentSizeDir = -currentSizeDir;
+    }
+    return newSize;
 }
 
 
@@ -103,19 +169,29 @@ function initVertexBuffers() {
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
 }
 
+function drawAll(_modelMatrix, _u_ModelMatrix) {
+    if (!_u_ModelMatrix) {
+        console.log('Failed to get the storage location of u_ModelMatrix');
+        return;
+    }
 
-function drawAll() {
-    //设置背景颜色，清空缓冲区
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    // 设置模型矩阵
+    _modelMatrix.setRotate(currentAngle, 0, 0, 1);
+    _modelMatrix.scale(currentSize, currentSize, 1);
+
+    // 将模型矩阵传给顶点着色器
+    gl.uniformMatrix4fv(_u_ModelMatrix, false, _modelMatrix.elements);
+
+    // 清空缓冲区
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    //绘制多边形
+    // 绘制多边形
     for (let i = 0; i < vertexNum; i += 4) {
         gl.drawArrays(gl.TRIANGLE_FAN, i, 4);
     }
 
     if (lineOn) {
-        //绘制线框
+        // 绘制线框
         for (let i = vertexNum; i < vertexNum * 2; i += 4) {
             gl.drawArrays(gl.LINE_LOOP, i, 4);
             gl.drawArrays(gl.LINE_LOOP, i, 3);
@@ -124,12 +200,10 @@ function drawAll() {
 
 }
 
-
 function reDraw() {
     initVertexBuffers();
     drawAll();
 }
-
 
 function initMouseEventHandlers() {
     let dragging = false;               //是否可以拖动
@@ -185,11 +259,18 @@ function initKeyboardEventHandlers() {
             case 'b':
                 lineOn = !lineOn;
                 console.log('line switch: ' + lineOn)
-                drawAll(polygon.length * 4 * 2)
+                reDraw()
                 break;
             case 't':
                 animOn = !animOn;
                 console.log('anim switch: ' + animOn)
+                if (animOn) {
+                    angle_last_change = Date.now();
+                    size_last_change = Date.now();
+                    startAnimation();
+                } else {
+                    stopAnimation();
+                }
                 break;
             default:
                 break;
